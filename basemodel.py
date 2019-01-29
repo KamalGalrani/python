@@ -66,8 +66,38 @@ def retrieve_resource(api, resource_id, query_string='',
             raise ValueError("The file %s contains no JSON")
         except IOError:
             pass
-    api_getter = api.getters[get_resource_type(resource_id)]
-    resource = check_resource(resource_id, api_getter, query_string)
+    resource_type = get_resource_type(resource_id)
+    api_getter = api.getters[resource_type]
+
+    if "exclude=fields;" in query_string:
+        resource = check_resource(resource_id, api_getter, query_string)
+    else:
+        offset = 0
+        resource = None
+        while True:
+            _resource = check_resource(
+                resource_id,
+                api_getter,
+                "offset={};{}".format(offset, query_string)
+            )
+
+            if resource is None:
+                resource = _resource
+            else:
+                fields = resource['object'][resource_type]['fields']
+                fields.update(_resource['object'][resource_type]['fields'])
+                resource['object'][resource_type]['fields'] = fields
+
+                resource['object']['fields_meta']['count'] += \
+                    _resource['object']['fields_meta']['count']
+
+            limit = resource['object']['fields_meta']['limit']
+            count = resource['object']['fields_meta']['count']
+            total = resource['object']['fields_meta']['total']
+            if count >= total:
+                break
+            offset = offset + limit
+
     return resource
 
 
